@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Liffey Pharmacy AI Assistant</title>
+  <style>
+    :root { font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color:#172033; background:#f5f7fb; }
+    * { box-sizing:border-box; }
+    body { margin:0; }
+    .app { max-width:980px; margin:0 auto; min-height:100vh; padding:24px 16px 40px; }
+    header { background:white; border-radius:18px; padding:22px; box-shadow:0 4px 18px rgba(20,30,50,.08); margin-bottom:16px; }
+    .brand { display:flex; gap:14px; align-items:center; }
+    .logo { width:48px;height:48px;border-radius:12px;background:#0b7a57;color:white;display:grid;place-items:center;font-size:25px;font-weight:800; }
+    h1 { margin:0; font-size:22px; } .sub { margin:5px 0 0;color:#667085;font-size:14px; }
+    .disclosure { margin-top:14px; padding:10px 12px; border-radius:10px; background:#eef7f3; font-size:12px; color:#315247; }
+    #chat { background:white; border-radius:18px; min-height:560px; padding:18px; box-shadow:0 4px 18px rgba(20,30,50,.08); }
+    .msg { max-width:82%; padding:12px 14px; border-radius:14px; margin:10px 0; line-height:1.45; white-space:pre-wrap; }
+    .user { margin-left:auto; background:#e7f1ff; border-bottom-right-radius:4px; }
+    .bot { margin-right:auto; background:#f2f4f7; border-bottom-left-radius:4px; }
+    .meta { font-size:11px;color:#667085;margin-top:6px; }
+    .trace { margin-top:8px;font-size:11px;color:#475467; }
+    .trace summary { cursor:pointer; }
+    .tool { margin:5px 0;padding:7px 9px;border-left:3px solid #0b7a57;background:#fff;border-radius:4px; }
+    form { display:flex; gap:10px; margin-top:14px; }
+    input { flex:1;padding:14px;border:1px solid #d0d5dd;border-radius:12px;font-size:15px; }
+    button { border:0;border-radius:12px;padding:0 18px;background:#0b7a57;color:white;font-weight:700;cursor:pointer; }
+    button:disabled { opacity:.5; cursor:wait; }
+    .examples { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+    .example { background:white;border:1px solid #d0d5dd;color:#344054;padding:8px 10px;border-radius:10px;cursor:pointer;font-size:12px; }
+    footer { color:#667085;font-size:11px;text-align:center;margin-top:14px; }
+  </style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand"><div class="logo">✚</div><div><h1>Liffey Pharmacy AI Assistant</h1><div class="sub">Live catalogue support and public drug information</div></div></div>
+    <div class="disclosure">You are chatting with an AI assistant. It may use live pharmacy catalogue data and public RxNorm drug information; it does not replace a pharmacist or medical professional.</div>
+  </header>
+
+  <main id="chat"></main>
+  <div class="examples">
+    <button class="example" type="button">Can I order food?</button>
+    <button class="example" type="button">How do I get to London from Dublin?</button>
+    <button class="example" type="button">What is 2+2?</button>
+    <button class="example" type="button">What is the price of paracetamol?</button>
+  </div>
+  <form id="form">
+    <input id="input" autocomplete="off" placeholder="Ask about products, stock, offers, or a medicine..." />
+    <button id="send">Send</button>
+  </form>
+  <footer>Live data is fetched when a catalogue/RxNorm tool is used. No catalogue values are embedded in this page.</footer>
+</div>
+<script>
+  // Set this to the deployed Google Apps Script Web App URL.
+  const BACKEND_URL = "PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE";
+  const chat = document.getElementById("chat");
+  const form = document.getElementById("form");
+  const input = document.getElementById("input");
+  const send = document.getElementById("send");
+
+  function addMessage(role, text, trace) {
+    const wrap = document.createElement("div");
+    wrap.className = "msg " + role;
+    wrap.textContent = text;
+    if (trace && trace.length) {
+      const details = document.createElement("details");
+      details.className = "trace";
+      const summary = document.createElement("summary");
+      summary.textContent = "Show live tool evidence";
+      details.appendChild(summary);
+      trace.forEach(t => {
+        const d = document.createElement("div");
+        d.className = "tool";
+        d.textContent = t;
+        details.appendChild(d);
+      });
+      wrap.appendChild(details);
+    }
+    chat.appendChild(wrap);
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  async function ask(q) {
+    if (!q.trim() || send.disabled) return;
+    addMessage("user", q);
+    input.value = "";
+    send.disabled = true;
+    addMessage("bot", "Checking live information and reasoning about your question…");
+    const pending = chat.lastElementChild;
+    try {
+      if (BACKEND_URL.includes("PASTE_YOUR")) throw new Error("Backend URL is not configured.");
+      const r = await fetch(BACKEND_URL, {
+        method:"POST",
+        headers:{"Content-Type":"text/plain;charset=utf-8"},
+        body: JSON.stringify({message:q})
+      });
+      const data = await r.json();
+      pending.remove();
+      if (!r.ok || data.error) throw new Error(data.error || "Request failed");
+      addMessage("bot", data.answer, data.trace);
+    } catch (e) {
+      pending.remove();
+      addMessage("bot", "I could not reach the live assistant right now. " + e.message);
+    } finally {
+      send.disabled = false; input.focus();
+    }
+  }
+  form.addEventListener("submit", e => { e.preventDefault(); ask(input.value); });
+  document.querySelectorAll(".example").forEach(b => b.addEventListener("click", () => ask(b.textContent)));
+  addMessage("bot", "Hello. I can help with Liffey Pharmacy's catalogue, including current prices, stock and offers. I can also look up public drug information. What would you like to know?");
+</script>
+</body>
+</html>
