@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -10,7 +9,6 @@
     --green:#0b6e4f; --green-dark:#084a35; --cream:#f7f4ee; --ink:#1c2321;
     --line:#dedad2; --warn:#b45309; --danger:#b91c1c;
   }
-  
   *{box-sizing:border-box;}
   body{
     font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
@@ -72,7 +70,7 @@
    it's fine to commit it directly in this file, unlike the Gemini API key
    (which stays server-side in Apps Script's Script Properties).
    ========================================================================= */
-const WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzEFuJ9DTCFv6yYyzj7aX7TNq8kAgylxKydzNRpj6JKdy2LP8rE0luBt3CiakWwzEvmCg/exec";
+const WEBAPP_URL = "PASTE_YOUR_APPS_SCRIPT_EXEC_URL_HERE";
 
 /* =========================================================================
    This page holds NO API key and NO copy of the pharmacy data. It only talks
@@ -126,11 +124,20 @@ document.getElementById("chatForm").addEventListener("submit", async (e) => {
   try {
     // Content-Type text/plain avoids a CORS preflight against the Apps Script web app;
     // the script still reads e.postData.contents as JSON regardless of this header.
-    const res = await fetch(WEBAPP_URL, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({ messages: history })
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s — Gemini + Sheet + RxNorm should never take this long
+    let res;
+    try {
+      res = await fetch(WEBAPP_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ messages: history }),
+        signal: controller.signal
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
+    if (!res.ok) throw new Error(`Backend returned HTTP ${res.status}. Check Apps Script deployment settings ("Who has access: Anyone") and the Executions log.`);
     const data = await res.json();
 
     if (data.error) throw new Error(data.error);
@@ -146,7 +153,11 @@ document.getElementById("chatForm").addEventListener("submit", async (e) => {
       addMsg("(No text response received.)", "system");
     }
   } catch (err) {
-    addMsg("Sorry, something went wrong: " + err.message, "system");
+    if (err.name === "AbortError") {
+      addMsg("The backend didn't respond within 45 seconds — check the Apps Script Executions log to see if it's stuck or erroring.", "system");
+    } else {
+      addMsg("Sorry, something went wrong: " + err.message, "system");
+    }
   } finally {
     typing.remove();
     document.getElementById("sendBtn").disabled = false;
