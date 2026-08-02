@@ -142,17 +142,19 @@ try {
     }
 
     if (!res.ok) throw new Error(`Backend returned HTTP ${res.status}. Check Apps Script deployment settings ("Who has access: Anyone") and the Executions log.`);
-    const data = await res.json();
+const data = await res.json();
 
     if (data.error) throw new Error(data.error);
 
     (data.trace || []).forEach(t => {
-      addTrace(`→ LIVE TOOL CALL: ${t.tool}(${JSON.stringify(t.args)})\nat ${t.at}\n${t.summary}`);
+      addTrace(`→ LIVE TOOL CALL: ${t.tool || 'tool'}\n${JSON.stringify(t)}`);
     });
 
-    if (data.text) {
-      addMsg(data.text, "bot");
-      history.push({ role: "model", parts: [{ text: data.text }] });
+    const replyText = data.answer || data.text || data.reply;
+
+    if (replyText) {
+      addMsg(replyText, "bot");
+      history.push({ role: "model", parts: [{ text: replyText }] });
     } else {
       addMsg("(No text response received.)", "system");
     }
