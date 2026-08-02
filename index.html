@@ -54,12 +54,6 @@
     For clinical advice, dosing, interactions, or anything about your own health, please speak to our pharmacist in person or by phone.
   </div>
 
-  <div class="settings">
-    <input id="webappUrl" type="text" placeholder="Paste your Apps Script Web App /exec URL here (one-time, saved in this browser)">
-    <button id="saveUrl">Save URL</button>
-    <button id="clearUrl">Clear</button>
-  </div>
-
   <div id="chat"></div>
 
   <form id="chatForm">
@@ -70,6 +64,15 @@
 
 <script>
 /* =========================================================================
+   Paste your Apps Script Web App /exec URL below, once, after you deploy it
+   (Deploy -> New deployment -> Web app in the Apps Script editor).
+   This is NOT a secret — it doesn't grant access to anything by itself, so
+   it's fine to commit it directly in this file, unlike the Gemini API key
+   (which stays server-side in Apps Script's Script Properties).
+   ========================================================================= */
+const WEBAPP_URL = "PASTE_YOUR_APPS_SCRIPT_EXEC_URL_HERE";
+
+/* =========================================================================
    This page holds NO API key and NO copy of the pharmacy data. It only talks
    to a Google Apps Script Web App (code.gs), which:
      - holds the Gemini API key server-side (Script Properties),
@@ -78,9 +81,6 @@
      - runs the Gemini tool-use loop,
    and returns just the final answer + a trace of the live tool calls it made.
    ========================================================================= */
-
-let webappUrl = localStorage.getItem("liffey_webapp_url") || "";
-document.getElementById("webappUrl").value = webappUrl;
 
 let history = []; // Gemini-format conversation: [{role:"user"|"model", parts:[{text}]}]
 
@@ -102,33 +102,18 @@ function addTrace(text){
   chatEl.scrollTop = chatEl.scrollHeight;
 }
 
-addMsg("Hi! I'm the Liffey Pharmacy assistant. Ask me about a product, a price, an offer, stock, a medication, or anything else on your mind.", "bot");
-
-document.getElementById("saveUrl").onclick = () => {
-  const val = document.getElementById("webappUrl").value.trim();
-  if (!val) {
-    addMsg("That field is empty — paste your Apps Script /exec URL into the box first, then click Save URL.", "system");
-    return;
-  }
-  if (!/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec$/.test(val)) {
-    addMsg("That doesn't look like an Apps Script Web App URL (should start with https://script.google.com/macros/s/ and end in /exec). Saved anyway, but double-check it.", "system");
-  }
-  webappUrl = val;
-  localStorage.setItem("liffey_webapp_url", webappUrl);
-  addMsg("Backend URL saved: " + webappUrl, "system");
-};
-document.getElementById("clearUrl").onclick = () => {
-  webappUrl = ""; localStorage.removeItem("liffey_webapp_url");
-  document.getElementById("webappUrl").value = "";
-  addMsg("Backend URL cleared.", "system");
-};
+if (WEBAPP_URL.indexOf("PASTE_YOUR") === 0) {
+  addMsg("Setup needed: open index.html, replace WEBAPP_URL near the top of the <script> with your Apps Script /exec URL, then redeploy to GitHub Pages.", "system");
+} else {
+  addMsg("Hi! I'm the Liffey Pharmacy assistant. Ask me about a product, a price, an offer, stock, a medication, or anything else on your mind.", "bot");
+}
 
 document.getElementById("chatForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const input = document.getElementById("userInput");
   const text = input.value.trim();
   if (!text) return;
-  if (!webappUrl) { addMsg("Please paste and save your Apps Script Web App URL first (top of page).", "system"); return; }
+  if (WEBAPP_URL.indexOf("PASTE_YOUR") === 0) { addMsg("Backend not configured yet — see the setup note above.", "system"); return; }
 
   addMsg(text, "user");
   history.push({ role: "user", parts: [{ text }] });
@@ -139,7 +124,7 @@ document.getElementById("chatForm").addEventListener("submit", async (e) => {
   try {
     // Content-Type text/plain avoids a CORS preflight against the Apps Script web app;
     // the script still reads e.postData.contents as JSON regardless of this header.
-    const res = await fetch(webappUrl, {
+    const res = await fetch(WEBAPP_URL, {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify({ messages: history })
