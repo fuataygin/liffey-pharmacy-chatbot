@@ -1,7 +1,5 @@
 <!DOCTYPE html>
-
 <html lang="en">
-  
 <head>
 <meta charset="UTF-8">
 <title>Liffey Pharmacy — Ask Us</title>
@@ -107,9 +105,17 @@ function addTrace(text){
 addMsg("Hi! I'm the Liffey Pharmacy assistant. Ask me about a product, a price, an offer, stock, a medication, or anything else on your mind.", "bot");
 
 document.getElementById("saveUrl").onclick = () => {
-  webappUrl = document.getElementById("webappUrl").value.trim();
+  const val = document.getElementById("webappUrl").value.trim();
+  if (!val) {
+    addMsg("That field is empty — paste your Apps Script /exec URL into the box first, then click Save URL.", "system");
+    return;
+  }
+  if (!/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec$/.test(val)) {
+    addMsg("That doesn't look like an Apps Script Web App URL (should start with https://script.google.com/macros/s/ and end in /exec). Saved anyway, but double-check it.", "system");
+  }
+  webappUrl = val;
   localStorage.setItem("liffey_webapp_url", webappUrl);
-  addMsg("Backend URL saved in this browser.", "system");
+  addMsg("Backend URL saved: " + webappUrl, "system");
 };
 document.getElementById("clearUrl").onclick = () => {
   webappUrl = ""; localStorage.removeItem("liffey_webapp_url");
