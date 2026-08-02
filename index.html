@@ -126,17 +126,21 @@ document.getElementById("chatForm").addEventListener("submit", async (e) => {
     // the script still reads e.postData.contents as JSON regardless of this header.
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s — Gemini + Sheet + RxNorm should never take this long
-    let res;
-    try {
-      res = await fetch(WEBAPP_URL, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ messages: history }),
+    let res;   
+    
+try {
+      // Use GET with query parameter to prevent Safari from blocking cross-site POST calls
+      const requestUrl = `${WEBAPP_URL}?message=${encodeURIComponent(text)}`;
+      
+      res = await fetch(requestUrl, {
+        method: "GET",
+        redirect: "follow",
         signal: controller.signal
       });
     } finally {
       clearTimeout(timeoutId);
     }
+
     if (!res.ok) throw new Error(`Backend returned HTTP ${res.status}. Check Apps Script deployment settings ("Who has access: Anyone") and the Executions log.`);
     const data = await res.json();
 
