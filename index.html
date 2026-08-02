@@ -201,7 +201,7 @@
 
   </main>
 
-  <script>
+<script>
 
     const BACKEND_URL =
       "https://script.google.com/macros/s/AKfycbyErparIvcM8NU2IU9q3rPABEqibVSW9GgTrrTQjRtBJMsl1Mm2AQHaBl2pkTmoUDRLdw/exec";
@@ -247,15 +247,10 @@
 
       try {
 
-        const response = await fetch(BACKEND_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "text/plain;charset=utf-8"
-          },
-          body: JSON.stringify({
-            message: message
-          })
-        });
+        // Changed from POST to GET via query parameter to resolve CORS/Redirect issues on Apps Script
+        const requestUrl = `${BACKEND_URL}?message=${encodeURIComponent(message)}`;
+
+        const response = await fetch(requestUrl);
 
         if (!response.ok) {
           throw new Error("Server returned HTTP " + response.status);
@@ -271,8 +266,9 @@
             "assistant"
           );
         } else {
+          // Checks for data.answer or data.reply depending on your Apps Script return key
           addMessage(
-            data.answer || "I couldn't produce an answer.",
+            data.answer || data.reply || "I couldn't produce an answer.",
             "assistant"
           );
         }
