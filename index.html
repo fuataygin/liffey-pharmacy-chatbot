@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Liffey Pharmacy — Ask Us</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{
+    --green:#0b6e4f; --green-dark:#084a35; --cream:#f7f4ee; --ink:#1c2321;
+    --line:#dedad2; --warn:#b45309; --danger:#b91c1c;
+  }
+  *{box-sizing:border-box;}
+  body{
+    font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+    margin:0; background:var(--cream); color:var(--ink);
+    display:flex; justify-content:center;
+  }
+  .app{ width:100%; max-width:720px; min-height:100vh; background:#fff;
+    display:flex; flex-direction:column; box-shadow:0 0 30px rgba(0,0,0,.06); }
+  header{ background:var(--green); color:#fff; padding:18px 20px; }
+  header h1{ margin:0; font-size:1.25rem; }
+  header p{ margin:4px 0 0; font-size:.8rem; opacity:.9; }
+  .disclosure{
+    background:#fff8e6; border-bottom:1px solid #f0e2b3; color:#6b5300;
+    font-size:.75rem; padding:8px 20px; line-height:1.4;
+  }
+  .settings{ padding:10px 20px; border-bottom:1px solid var(--line); font-size:.8rem; display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
+  .settings input{ flex:1; min-width:220px; padding:6px 8px; border:1px solid var(--line); border-radius:6px; font-size:.8rem;}
+  .settings button{ padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; font-size:.8rem; cursor:pointer;}
+  #chat{ flex:1; padding:16px 20px; overflow-y:auto; display:flex; flex-direction:column; gap:12px;}
+  .msg{ max-width:85%; padding:10px 13px; border-radius:12px; font-size:.92rem; line-height:1.45; white-space:pre-wrap;}
+  .msg.user{ align-self:flex-end; background:var(--green); color:#fff; border-bottom-right-radius:2px;}
+  .msg.bot{ align-self:flex-start; background:#eef2ef; border-bottom-left-radius:2px;}
+  .msg.system{ align-self:center; background:transparent; color:#888; font-size:.75rem; font-style:italic;}
+  .tool-trace{ align-self:flex-start; max-width:90%; background:#f2f6ff; border:1px dashed #9db8e0;
+    border-radius:10px; padding:8px 12px; font-size:.72rem; color:#26406b; font-family:Consolas,monospace; white-space:pre-wrap;}
+  form{ display:flex; gap:8px; padding:14px 20px; border-top:1px solid var(--line);}
+  input#userInput{ flex:1; padding:10px 12px; border:1px solid var(--line); border-radius:8px; font-size:.95rem;}
+  button#sendBtn{ padding:10px 18px; border:none; border-radius:8px; background:var(--green); color:#fff; font-weight:600; cursor:pointer;}
+  button#sendBtn:disabled{ background:#9db8a9; cursor:default;}
+  .typing{ align-self:flex-start; color:#888; font-size:.85rem; font-style:italic;}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>💊 Liffey Pharmacy — Ask Us</h1>
+    <p>Live product info, offers &amp; general medication info assistant</p>
+  </header>
+
+  <div class="disclosure">
+    <strong>You are talking to an AI assistant, not a pharmacist.</strong> It reads live data from our
+    stock/price sheet and from the public RxNorm drug database at the moment you ask, but it can make mistakes.
+    For clinical advice, dosing, interactions, or anything about your own health, please speak to our pharmacist in person or by phone.
+  </div>
+
+  <div class="settings">
+    <input id="webappUrl" type="text" placeholder="Paste your Apps Script Web App /exec URL here (one-time, saved in this browser)">
+    <button id="saveUrl">Save URL</button>
+    <button id="clearUrl">Clear</button>
+  </div>
+
+  <div id="chat"></div>
+
+  <form id="chatForm">
+    <input id="userInput" autocomplete="off" placeholder="Ask about a product, price, offer, or a medication..." required>
+    <button id="sendBtn" type="submit">Send</button>
+  </form>
+</div>
+
+<script>
+/* =========================================================================
+   This page holds NO API key and NO copy of the pharmacy data. It only talks
+   to a Google Apps Script Web App (code.gs), which:
+     - holds the Gemini API key server-side (Script Properties),
+     - reads the live Google Sheet natively on every call,
+     - calls the public RxNorm API,
+     - runs the Gemini tool-use loop,
+   and returns just the final answer + a trace of the live tool calls it made.
+   ========================================================================= */
+
+let webappUrl = localStorage.getItem("liffey_webapp_url") || "";
+document.getElementById("webappUrl").value = webappUrl;
+
+let history = []; // Gemini-format conversation: [{role:"user"|"model", parts:[{text}]}]
+
+const chatEl = document.getElementById("chat");
+
+function addMsg(text, cls){
+  const div = document.createElement("div");
+  div.className = "msg " + cls;
+  div.textContent = text;
+  chatEl.appendChild(div);
+  chatEl.scrollTop = chatEl.scrollHeight;
+  return div;
+}
+function addTrace(text){
+  const div = document.createElement("div");
+  div.className = "tool-trace";
+  div.textContent = text;
+  chatEl.appendChild(div);
+  chatEl.scrollTop = chatEl.scrollHeight;
+}
+
+addMsg("Hi! I'm the Liffey Pharmacy assistant. Ask me about a product, a price, an offer, stock, a medication, or anything else on your mind.", "bot");
+
+document.getElementById("saveUrl").onclick = () => {
+  webappUrl = document.getElementById("webappUrl").value.trim();
+  localStorage.setItem("liffey_webapp_url", webappUrl);
+  addMsg("Backend URL saved in this browser.", "system");
+};
+document.getElementById("clearUrl").onclick = () => {
+  webappUrl = ""; localStorage.removeItem("liffey_webapp_url");
+  document.getElementById("webappUrl").value = "";
+  addMsg("Backend URL cleared.", "system");
+};
+
+document.getElementById("chatForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const input = document.getElementById("userInput");
+  const text = input.value.trim();
+  if (!text) return;
+  if (!webappUrl) { addMsg("Please paste and save your Apps Script Web App URL first (top of page).", "system"); return; }
+
+  addMsg(text, "user");
+  history.push({ role: "user", parts: [{ text }] });
+  input.value = "";
+  document.getElementById("sendBtn").disabled = true;
+  const typing = addMsg("Liffey Pharmacy assistant is typing…", "typing");
+
+  try {
+    // Content-Type text/plain avoids a CORS preflight against the Apps Script web app;
+    // the script still reads e.postData.contents as JSON regardless of this header.
+    const res = await fetch(webappUrl, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ messages: history })
+    });
+    const data = await res.json();
+
+    if (data.error) throw new Error(data.error);
+
+    (data.trace || []).forEach(t => {
+      addTrace(`→ LIVE TOOL CALL: ${t.tool}(${JSON.stringify(t.args)})\nat ${t.at}\n${t.summary}`);
+    });
+
+    if (data.text) {
+      addMsg(data.text, "bot");
+      history.push({ role: "model", parts: [{ text: data.text }] });
+    } else {
+      addMsg("(No text response received.)", "system");
+    }
+  } catch (err) {
+    addMsg("Sorry, something went wrong: " + err.message, "system");
+  } finally {
+    typing.remove();
+    document.getElementById("sendBtn").disabled = false;
+  }
+});
+</script>
+</body>
+</html>
