@@ -1,6 +1,13 @@
 // ⚠️ Replace this with YOUR Apps Script Web App URL (must end in /exec)
 const API_URL = "https://script.google.com/macros/s/AKfycbxOT8R4fziNOAMgp_11yjGCcMVqpsDdvOxhH1QLR1F1EesyHqayMxM8a0Z6iX70kEoiow/exec";
  
+// Keeps track of the conversation so the backend can understand follow-up
+// questions like "is this too expensive?" that refer back to something
+// said earlier. Stored only in memory for this browser tab — resets on
+// page reload, which is fine for a support chat session.
+let conversationHistory = [];
+const MAX_HISTORY_MESSAGES = 8; // last 8 messages (4 exchanges) is plenty of context
+ 
 async function sendMessage() {
   const input = document.getElementById("userInput");
   const chatBox = document.getElementById("chatBox");
@@ -19,6 +26,8 @@ async function sendMessage() {
     // 3. Call the live Apps Script backend — this is the real network request.
     //    It is sent fresh every single time, so the sheet/RxNorm data behind
     //    it is always read at the moment of the question, not cached here.
+    //    We also send recent conversation history so the backend can
+    //    resolve references like "this" or "it" to what was just discussed.
     const response = await fetch(API_URL, {
       method: "POST",
       headers: {
@@ -28,7 +37,10 @@ async function sendMessage() {
         // Sending as text/plain avoids a CORS preflight request, and
         // e.postData.contents on the backend still parses fine with JSON.parse().
       },
-      body: JSON.stringify({ message: question })
+      body: JSON.stringify({
+        message: question,
+        history: conversationHistory
+      })
     });
  
     if (!response.ok) {
@@ -40,9 +52,20 @@ async function sendMessage() {
     // 4. Replace the "Thinking..." bubble with the real reply
     // TEMP DEBUG: show the real backend error if present, so we can diagnose.
     // Remove the data.error part once everything is working.
-    thinkingBubble.textContent = data.error
+    const replyText = data.error
       ? (data.reply + " [DEBUG: " + data.error + "]")
       : (data.reply || "Sorry, I didn't get a response.");
+ 
+    thinkingBubble.textContent = replyText;
+ 
+    // 5. Record this exchange in history for future follow-up questions
+    conversationHistory.push({ role: "user", text: question });
+    conversationHistory.push({ role: "bot", text: replyText });
+ 
+    // Keep only the most recent messages so the payload doesn't grow forever
+    if (conversationHistory.length > MAX_HISTORY_MESSAGES) {
+      conversationHistory = conversationHistory.slice(-MAX_HISTORY_MESSAGES);
+    }
  
   } catch (err) {
     thinkingBubble.textContent = "Sorry, I couldn't reach the assistant right now. Please try again.";
