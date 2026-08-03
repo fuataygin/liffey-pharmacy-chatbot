@@ -38,7 +38,11 @@ async function sendMessage() {
     const data = await response.json();
  
     // 4. Replace the "Thinking..." bubble with the real reply
-    thinkingBubble.textContent = data.reply || "Sorry, I didn't get a response.";
+    // TEMP DEBUG: show the real backend error if present, so we can diagnose.
+    // Remove the data.error part once everything is working.
+    thinkingBubble.textContent = data.error
+      ? (data.reply + " [DEBUG: " + data.error + "]")
+      : (data.reply || "Sorry, I didn't get a response.");
  
   } catch (err) {
     thinkingBubble.textContent = "Sorry, I couldn't reach the assistant right now. Please try again.";
